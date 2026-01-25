@@ -3,20 +3,20 @@
 """Minitel est un module permettant de piloter un Minitel depuis un script
 écrit en Python.
 """
-
+import time
 from serial import Serial      # Liaison physique avec le Minitel
 from threading import Thread   # Threads pour l’émission/réception
 from queue import Queue, Empty # Files de caractères pour l’émission/réception
 
 from minitel.Sequence import Sequence # Gestion des séquences de caractères
 
-from minitel.constantes import (SS2, SEP, ESC, CSI, PRO1, PRO2, PRO3, MIXTE1,
-    MIXTE2, TELINFO, ENQROM, SOH, EOT, TYPE_MINITELS, STATUS_FONCTIONNEMENT,
+from minitel.constantes import (CTRL_ENTREE, SS2, SEP, ESC, CSI, PRO1, PRO2, PRO3, MIXTE1,
+    MIXTE2, STATUS_VITESSE, TELINFO, ENQROM, SOH, EOT, TYPE_MINITELS, STATUS_FONCTIONNEMENT,
     LONGUEUR_PRO2, STATUS_TERMINAL, PROG, START, STOP, LONGUEUR_PRO3,
     RCPT_CLAVIER, ETEN, C0, MINUSCULES, RS, US, VT, LF, BS, TAB, CON, COF,
     AIGUILLAGE_ON, AIGUILLAGE_OFF, RCPT_ECRAN, EMET_MODEM, FF, CAN, BEL, CR,
     SO, SI, B300, B1200, B4800, B9600, REP, COULEURS_MINITEL,
-    CAPACITES_BASIQUES, CONSTRUCTEURS)
+    CAPACITES_BASIQUES, CONSTRUCTEURS, ENVOI)
 
 def normaliser_couleur(couleur):
     """Retourne le numéro de couleur du Minitel.
@@ -123,6 +123,7 @@ class Minitel:
         # Initialise l’état du Minitel
         self.mode = 'VIDEOTEX'
         self.vitesse = 1200
+        self.cursor = False
 
         # Initialise la liste des capacités du Minitel
         self.capacite = CAPACITES_BASIQUES
@@ -146,6 +147,7 @@ class Minitel:
         # Initialise un drapeau pour l’arrêt des threads
         # (les threads partagent les mêmes variables que le code principal)
         self._continuer = True
+        self.eat_echo = False
 
         # Crée les deux threads de lecture/écriture
         self._threads = []
@@ -172,7 +174,6 @@ class Minitel:
         """
         # Indique aux threads qu’ils doivent arrêter toute activité
         self._continuer = False
-
         # Attend que tous les threads aient fini
         for thread in self._threads:
             thread.join()
@@ -190,7 +191,6 @@ class Minitel:
         while self._continuer:
             # Attend un caractère pendant 1 seconde
             caractere = self._minitel.read()
-
             if len(caractere) == 1:
                 self.entree.put(caractere)
 
@@ -219,7 +219,7 @@ class Minitel:
             except Empty:
                 continue
 
-    def envoyer(self, contenu):
+    def send(self, content: str | Sequence) -> None:
         """Envoi de séquence de caractères 
 
         Envoie une séquence de caractère en direction du Minitel.
@@ -231,12 +231,12 @@ class Minitel:
             un entier
         """
         # Convertit toute entrée en objet Sequence
-        if not isinstance(contenu, Sequence):
-            contenu = Sequence(contenu)
+        if not isinstance(content, Sequence):
+            content = Sequence(content, standard=self.mode)
 
         # Ajoute les caractères un par un dans la file d’attente d’envoi
-        for valeur in contenu.valeurs:
-            self.sortie.put(chr(valeur))
+        for value in content.valeurs:
+            self.sortie.put(chr(value))
 
     def recevoir(self, bloque = False, attente = None):
         """Lit un caractère en provenance du Minitel
@@ -267,7 +267,7 @@ class Minitel:
 
         return self.entree.get(bloque, attente).decode()
 
-    def recevoir_sequence(self,bloque = True, attente=None):
+    def recevoir_sequence(self, bloque = True, attente=None):
         """Lit une séquence en provenance du Minitel
 
         Retourne un objet Sequence reçu depuis le Minitel. Cette fonction
@@ -368,15 +368,16 @@ class Minitel:
         self.entree = Queue()
 
         # Envoie la séquence
-        self.envoyer(contenu)
+        self.send(contenu)
 
         # Attend que toute la séquence ait été envoyée
         self.sortie.join()
-
+        
         # Tente de recevoir le nombre de caractères indiqué par le paramètre
         # attente avec un délai d’1 seconde.
         retour = Sequence()
-        for _ in range(0, attente):
+        for t in range(0, attente):
+            time.sleep(0.1)
             try:
                 # Attend un caractère
                 entree_bytes = self.entree.get(block = True, timeout = 1)
@@ -385,7 +386,6 @@ class Minitel:
                 # Si un caractère n’a pas été envoyé en moins d’une seconde,
                 # on abandonne
                 break
-
         return retour
 
     def definir_mode(self, mode = 'VIDEOTEX'):
@@ -552,7 +552,7 @@ class Minitel:
             self._minitel.baudrate = vitesse
 
             # Envoie une demande de statut terminal
-            retour = self.appeler([PRO1, STATUS_TERMINAL], LONGUEUR_PRO2)
+            retour = self.appeler([PRO1, STATUS_VITESSE], LONGUEUR_PRO2)
 
             # Le Minitel doit renvoyer un acquittement PRO2
             if retour.longueur == LONGUEUR_PRO2:
@@ -599,7 +599,6 @@ class Minitel:
 
         # Envoie une commande protocole de programmation de vitesse
         retour = self.appeler([PRO2, PROG, vitesses[vitesse]], LONGUEUR_PRO2)
-
         # Le Minitel doit renvoyer un acquittement PRO2
         if retour.longueur == LONGUEUR_PRO2:
             # Si on peut lire un acquittement PRO2 avant d’avoir régler la
@@ -705,13 +704,13 @@ class Minitel:
         if caractere != None:
             couleur = normaliser_couleur(caractere)
             if couleur != None:
-                self.envoyer([ESC, 0x40 + couleur])
+                self.send([ESC, 0x40 + couleur])
 
         # Définit la couleur d’arrière-plan (la couleur de fond)
         if fond != None:
             couleur = normaliser_couleur(fond)
             if couleur != None:
-                self.envoyer([ESC, 0x50 + couleur])
+                self.send([ESC, 0x50 + couleur])
 
     def position(self, colonne, ligne, relatif = False):
         """Définit la position du curseur du Minitel
@@ -750,34 +749,34 @@ class Minitel:
         if not relatif:
             # Déplacement absolu
             if colonne == 1 and ligne == 1:
-                self.envoyer([RS])
+                self.send([RS])
             else:
-                self.envoyer([US, 0x40 + ligne, 0x40 + colonne])
+                self.send([US, 0x40 + ligne, 0x40 + colonne])
         else:
             # Déplacement relatif par rapport à la position actuelle
             if ligne != 0:
                 if ligne >= -4 and ligne <= -1:
                     # Déplacement court en haut
-                    self.envoyer([VT]*-ligne)
+                    self.send([VT]*-ligne)
                 elif ligne >= 1 and ligne <= 4:
                     # Déplacement court en bas
-                    self.envoyer([LF]*ligne)
+                    self.send([LF]*ligne)
                 else:
                     # Déplacement long en haut ou en bas
                     direction = { True: 'B', False: 'A'}
-                    self.envoyer([CSI, str(ligne), direction[ligne < 0]])
+                    self.send([CSI, str(ligne), direction[ligne < 0]])
 
             if colonne != 0:
                 if colonne >= -4 and colonne <= -1:
                     # Déplacement court à gauche
-                    self.envoyer([BS]*-colonne)
+                    self.send([BS]*-colonne)
                 elif colonne >= 1 and colonne <= 4:
                     # Déplacement court à droite
-                    self.envoyer([TAB]*colonne)
+                    self.send([TAB]*colonne)
                 else:
                     # Déplacement long à gauche ou à droite
                     direction = { True: 'C', False: 'D'}
-                    self.envoyer([CSI, str(colonne), direction[colonne < 0]])
+                    self.send([CSI, str(colonne), direction[colonne < 0]])
 
     def taille(self, largeur = 1, hauteur = 1):
         """Définit la taille des prochains caractères
@@ -809,7 +808,7 @@ class Minitel:
         assert largeur in [1, 2]
         assert hauteur in [1, 2]
 
-        self.envoyer([ESC, 0x4c + (hauteur - 1) + (largeur - 1) * 2])
+        self.send([ESC, 0x4c + (hauteur - 1) + (largeur - 1) * 2])
 
     def effet(self, soulignement = None, clignotement = None, inversion = None):
         """Active ou désactive des effets
@@ -841,17 +840,17 @@ class Minitel:
 
         # Gère le soulignement
         soulignements = {True: [ESC, 0x5a], False: [ESC, 0x59], None: None}
-        self.envoyer(soulignements[soulignement])
+        self.send(soulignements[soulignement])
 
         # Gère le clignotement
         clignotements = {True: [ESC, 0x48], False: [ESC, 0x49], None: None}
-        self.envoyer(clignotements[clignotement])
+        self.send(clignotements[clignotement])
 
         # Gère l’inversion vidéo
         inversions = {True: [ESC, 0x5d], False: [ESC, 0x5c], None: None}
-        self.envoyer(inversions[inversion])
+        self.send(inversions[inversion])
 
-    def curseur(self, visible):
+    def curseur(self, visible: bool):
         """Active ou désactive l’affichage du curseur
 
         Le Minitel peut afficher un curseur clignotant à la position
@@ -868,10 +867,10 @@ class Minitel:
         :type visible:
             un booléen
         """
-        assert visible in [True, False]
-
+        assert isinstance(visible, bool)
         etats = {True: CON, False: COF}
-        self.envoyer([etats[visible]])
+        self.cursor = visible
+        self.send([etats[visible]])
 
     def echo(self, actif):
         """Active ou désactive l’écho clavier
@@ -937,10 +936,11 @@ class Minitel:
             'statut': [US, 0x40, 0x41, CAN, LF],
             'vraimenttout': [FF, US, 0x40, 0x41, CAN, LF]
         }
-
         assert portee in portees
-
-        self.envoyer(portees[portee])
+        if self.mode == 'TELEINFORMATIQUE' and portee == 'tout':
+            self.send([CTRL_ENTREE])
+        else:
+            self.send(portees[portee])
 
     def repeter(self, caractere, longueur):
         """Répéter un caractère
@@ -960,21 +960,21 @@ class Minitel:
         assert isinstance(caractere, (str, int, list))
         assert isinstance(caractere, int) or len(caractere) == 1
 
-        self.envoyer([caractere, REP, 0x40 + longueur - 1])
+        self.send([caractere, REP, 0x40 + longueur - 1])
 
     def bip(self):
         """Émet un bip
 
         Demande au Minitel d’émettre un bip
         """
-        self.envoyer([BEL])
+        self.send([BEL])
 
     def debut_ligne(self):
         """Retour en début de ligne
 
         Positionne le curseur au début de la ligne courante.
         """
-        self.envoyer([CR])
+        self.send([CR])
 
     def supprime(self, nb_colonne = None, nb_ligne = None):
         """Supprime des caractères après le curseur
@@ -1001,10 +1001,10 @@ class Minitel:
                 nb_ligne == None
 
         if nb_colonne != None:
-            self.envoyer([CSI, str(nb_colonne), 'P'])
+            self.send([CSI, str(nb_colonne), 'P'])
 
         if nb_ligne != None:
-            self.envoyer([CSI, str(nb_ligne), 'M'])
+            self.send([CSI, str(nb_ligne), 'M'])
 
     def insere(self, nb_colonne = None, nb_ligne = None):
         """Insère des caractères après le curseur
@@ -1027,10 +1027,10 @@ class Minitel:
                 nb_ligne == None
 
         if nb_colonne != None:
-            self.envoyer([CSI, '4h', ' ' * nb_colonne, CSI, '4l'])
+            self.send([CSI, '4h', ' ' * nb_colonne, CSI, '4l'])
 
         if nb_ligne != None:
-            self.envoyer([CSI, str(nb_ligne), 'L'])
+            self.send([CSI, str(nb_ligne), 'L'])
 
     def semigraphique(self, actif = True):
         """Passe en mode semi-graphique ou en mode alphabétique
@@ -1044,7 +1044,7 @@ class Minitel:
         assert actif in [True, False]
 
         actifs = { True: SO, False: SI}
-        self.envoyer(actifs[actif])
+        self.send(actifs[actif])
 
     def redefinir(self, depuis, dessins, jeu = 'G0'):
         """Redéfinit des caractères du Minitel
@@ -1097,12 +1097,12 @@ class Minitel:
 
         # Deux jeux sont disponible G’0 et G’1
         if jeu == 'G0':
-            self.envoyer([US, 0x23, 0x20, 0x20, 0x20, 0x42, 0x49])
+            self.send([US, 0x23, 0x20, 0x20, 0x20, 0x42, 0x49])
         else:
-            self.envoyer([US, 0x23, 0x20, 0x20, 0x20, 0x43, 0x49])
+            self.send([US, 0x23, 0x20, 0x20, 0x20, 0x43, 0x49])
 
         # On indique à partir de quel caractère on veut rédéfinir les dessins
-        self.envoyer([US, 0x23, depuis, 0x30])
+        self.send([US, 0x23, depuis, 0x30])
 
         octet = ''
         compte_pixel = 0
@@ -1119,24 +1119,62 @@ class Minitel:
             # On regroupe les pixels du caractères par paquets de 6
             # car on ne peut envoyer que 6 bits à la fois
             if len(octet) == 6:
-                self.envoyer(0x40 + int(octet, 2))
+                self.send(0x40 + int(octet, 2))
                 octet = ''
 
             # Quand 80 pixels (8 colonnes × 10 lignes) ont été envoyés
             # on ajoute 4 bits à zéro car l’envoi se fait par paquet de 6 bits
             # (8×10 = 80 pixels, 14×6 = 84 bits, 84-80 = 4)
             if compte_pixel == 80:
-                self.envoyer(0x40 + int(octet + '0000', 2))
-                self.envoyer(0x30)
+                self.send(0x40 + int(octet + '0000', 2))
+                self.send(0x30)
                 octet = ''
                 compte_pixel = 0
 
         # Positionner le curseur permet de sortir du mode de définition
-        self.envoyer([US, 0x41, 0x41])
+        self.send([US, 0x41, 0x41])
 
         # Sélectionne le jeu de caractère fraîchement modifié (G’0 ou G’1)
         if jeu == 'GO':
-            self.envoyer([ESC, 0x28, 0x20, 0x42])
+            self.send([ESC, 0x28, 0x20, 0x42])
         else:
-            self.envoyer([ESC, 0x29, 0x20, 0x43])
+            self.send([ESC, 0x29, 0x20, 0x43])
+    
+    def flush_echo(self):
+        """Consomme tous les caractères parasites restants"""
+        try:
+            while True:
+                seq_flush = self.recevoir_sequence(bloque=False)
+                if not seq_flush.valeurs:
+                    break
+        except Empty:
+            pass
+            
+    def read(self):
+        """
+        Lit une séquence depuis le Minitel jusqu'à ce que la touche 'ENVOI' soit pressée.
+        Retourne le texte complet reçu, sans l'écho 'M'.
+        """
+        ENVOI_CODE = [0x1B, 0x4f, 0x4d] if self.mode == "TELEINFORMATIQUE" else ENVOI
+        buffer = []
+        
+        while True:
+            seq = self.recevoir_sequence(bloque=True)
+            vals = seq.valeurs
+            if not vals:
+                continue
+            # Accumuler les octets
+            buffer.extend(vals)
+            print(vals)
+            # Vérifie si la séquence ENVOI est présente dans le buffer
+            if len(buffer) >= len(ENVOI_CODE):
+                # Parcourt le buffer pour chercher ENVOI_CODE
+                if buffer[-len(ENVOI_CODE):] == ENVOI_CODE:
+                    # Retire tout ce qui précède ENVOI_CODE
+                    texte = buffer[:-len(ENVOI_CODE)]
+                    # Retourne le texte accumulé
+                    seq_final = Sequence(standard=self.mode)
+                    seq_final.valeurs = texte
+                    print(seq_final.valeurs)
+                    return seq_final.decode()
 

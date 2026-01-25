@@ -29,6 +29,27 @@ UNICODEVERSAUTRE = {
     'à': '0E400F', 'è': '0E7F0F', 'é': '0E7B0F', 'ù': '0E7C0F'
 }
 
+# UNICODEVERSAUTRE = {
+#     '£': '0E230F',
+#     '°': '0E5B0F', 'ç': '0E5C0F', "'": '27', '`': '60', '§': '0E5D0F',
+#     'à': '0E400F', 'â': '0E5E0F', 'ä': '0E7D0F',
+#     'è': '0E7F0F', 'é': '0E7B0F', 'ê': '0E5F0F', 'ë': '0E7E0F',
+#     'î': '0E5E0F', 'ï': '0E7E0F',
+#     'ô': '0E5E0F', 'ö': '0E7D0F',
+#     'ù': '0E7C0F', 'û': '0E5E0F', 'ü': '0E7D0F',
+# }
+
+# table inverse VIDEOTEX (hex → unicode)
+VIDEOTEX_TO_UNICODE = {}
+
+# VIDEOTEX
+for char, hexcode in UNICODEVERSVIDEOTEX.items():
+    VIDEOTEX_TO_UNICODE[unhexlify(hexcode)] = char
+
+# MIXTE / TELEINFORMATIQUE
+for char, hexcode in UNICODEVERSAUTRE.items():
+    VIDEOTEX_TO_UNICODE[unhexlify(hexcode)] = char
+
 class Sequence:
     """Une classe représentant une séquence de valeurs
 
@@ -149,11 +170,13 @@ class Sequence:
         if self.standard == 'VIDEOTEX':
             if caractere in UNICODEVERSVIDEOTEX:
                 return unhexlify(UNICODEVERSVIDEOTEX[caractere])
-        else:
+        else: # TELEINFORMATIQUE / MIXTE
             if caractere in UNICODEVERSAUTRE:
                 return unhexlify(UNICODEVERSAUTRE[caractere])
-
-        return normalize('NFKD', caractere).encode('ascii', 'replace')
+            # sinon renvoyer directement le code ASCII brut (compatible 0x20-0x7E)
+            return bytes([ord(caractere)])
+        # return normalize('NFKD', caractere).encode('ascii', 'replace')
+        return bytes([ord(caractere)])
 
     def egale(self, sequence):
         """Teste l’égalité de 2 séquences
@@ -178,3 +201,48 @@ class Sequence:
 
         return self.valeurs == sequence.valeurs
 
+    def decode(self) -> str:
+        """
+        Décode des octets reçus du Minitel en Unicode Python, selon le mode
+        : VIDEOTEX ou TELEINFORMATIQUE.
+        """
+        i = 0
+        output = ""
+        data = bytes(self.valeurs)
+
+        while i < len(data):
+            matched = False
+
+            # Mode VIDEOTEX : tenter de correspondre à une séquence spéciale VIDEOTEX
+            if self.standard == 'VIDEOTEX':
+                for seq, unicode_char in VIDEOTEX_TO_UNICODE.items():
+                    if data[i:i+len(seq)] == seq:
+                        output += unicode_char
+                        i += len(seq)
+                        matched = True
+                        break
+
+                if matched:
+                    continue
+
+            # Mode TELEINFORMATIQUE : les caractères sont directement ASCII imprimables
+            if self.standard == 'TELEINFORMATIQUE':
+                # Ignorer ESC (0x1B) ou autres codes de contrôle connus
+                if data[i] in (0x00, 0x1B, 0x0D, 0x0A):
+                    i += 1
+                    continue
+
+                # Pour les octets imprimables ASCII standard
+                if 32 <= data[i] <= 126:
+                    output += chr(data[i])
+                else:
+                    # Pour tout autre octet non imprimable, ignorer
+                    pass
+                i += 1
+            else:
+                # Mode VIDEOTEX standard : ASCII direct si pas de correspondance VIDEOTEX
+                if 32 <= data[i] <= 126:
+                    output += chr(data[i])
+                i += 1
+
+        return output

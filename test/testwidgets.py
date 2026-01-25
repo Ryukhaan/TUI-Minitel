@@ -12,7 +12,7 @@ minitel = Minitel()
 
 minitel.deviner_vitesse()
 minitel.identifier()
-minitel.definir_vitesse(9600)
+minitel.make_speed(9600)
 minitel.definir_mode('VIDEOTEX')
 minitel.configurer_clavier(etendu = True, curseur = False, minuscule = True)
 minitel.echo(False)
