@@ -6,10 +6,10 @@ from minitel.Minitel import Minitel
 from minitel.constantes import PRO1, PRO2
 from minitel.tui.keyboard import KeyboardController
 from minitel.tui.screen import MinitelScreen
-from minitel.tui.widget import *
+from minitel.tui.widget.widget import *
 from minitel.tui.core import Color, Effect
-from minitel.tui.header import Footer
-from minitel.tui.menu import Menu
+from minitel.tui.window.footer import Footer
+from minitel.tui.window.menu import Menu
 
 class MinitelRedirector:
     def __init__(self, minitel):
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     while True:
         changed = keyboard.poll()
         if changed:
-            screen.render()   
+            screen.render()
         time.sleep(0.01)
     # Fin du programme retour en mode "default"
 

@@ -1,5 +1,5 @@
-from .core import Color, Effect, Mixel
-from .config import SCREEN_WIDTH, SCREEN_HEIGHT
+from tui.core.core import Color, Effect, Mixel
+from tui.core.config import SCREEN_WIDTH, SCREEN_HEIGHT
 
 class Widget:
     """Classe de base pour la création d’élément d’interface utilisateur
@@ -105,61 +105,4 @@ class TextInput:
             text_clipped = line[:self.width]
             for j, c in enumerate(text_clipped):
                 mixels.append(Mixel(self.x + j, self.y + i, c))
-
-        # curseur
-        # if self.cursor_y < self.height and self.cursor_x < self.width:
-        #     mixels.append(Mixel(self.x + self.cursor_x,
-        #                         self.y + self.cursor_y,
-        #                         "_"))
         return mixels
-    
-class HorizontalLine(Widget):
-    """Classe de gestion de label
-
-    Elle ne fait qu’afficher un texte d’une seule ligne.
-    """
-    def __init__(self, x: int, y: int, length: int = 1, type: str = 'top',
-                color: Color = Color.WHITE, 
-                effect: Effect = Effect.SEMIGRAPHIQUE):
-        super().__init__(x, y, length, 1, color, effect)
-        self.type = type
-        if self.type == 'top':
-            self.text = "#" * length
-        elif self.type == 'middle':
-            self.text = "," * length
-        elif self.type == 'bottom':
-            self.text = "p" * length
-        else:
-            self.text = f"{type}" * length
-
-    def render(self) -> list[Mixel]:
-        """Affiche le label
-
-        Cette méthode est appelée dès que l’on veut afficher l’élément.
-        """
-        mixel_array: list[Mixel] = []
-        for i, char in enumerate(self.text):
-            mixel_array.append(Mixel(self.x+i, self.y, char, self.color, self.effect))
-        return mixel_array
-
-class Label(Widget):
-    """Classe de gestion de label
-
-    Elle ne fait qu’afficher un texte d’une seule ligne.
-    """
-    def __init__(self, x: int, y: int,
-                text: str = '', 
-                color: Color = Color.WHITE, 
-                effect: Effect = Effect.NONE):
-        super().__init__(x, y, len(text), 1, color, effect)
-        self.text = text
-
-    def render(self) -> list[Mixel]:
-        """Affiche le label
-
-        Cette méthode est appelée dès que l’on veut afficher l’élément.
-        """
-        mixel_array: list[Mixel] = []
-        for i, char in enumerate(self.text):
-            mixel_array.append(Mixel(self.x+i, self.y, char, self.color, self.effect))
-        return mixel_array

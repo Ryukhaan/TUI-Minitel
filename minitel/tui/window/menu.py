@@ -1,8 +1,9 @@
 from typing import NamedTuple
-from .widget import Widget, Label
-from .config import SCREEN_HEIGHT, SCREEN_WIDTH
-from .core import Effect, Color
-from .keyboard import Key
+from .base import Window
+from .ops import draw_text
+
+from minitel.tui.core import Effect, Color
+from minitel.tui.keyboard import Key
 
 class Command(NamedTuple):
     name: str
@@ -10,10 +11,10 @@ class Command(NamedTuple):
     enabled: bool
     extension: dict
 
-class Menu(Widget):
+class Menu(Window):
 
-    def __init__(self, x, y, width, height, color = Color.WHITE, effect = Effect.NONE):
-        super().__init__(x, y, width, height, color, effect)
+    def __init__(self, rect):
+        super().__init__(rect)
         self.index: int = -1
         self.commands: list[Command] = []
         self.keymap = {
@@ -54,8 +55,8 @@ class Menu(Widget):
         mixels = []
         for row, command in enumerate(self.commands):
             mixels.extend(
-                Label(self.x, self.y + row, 
-                    text=command.name,
-                    effect=Effect.INVERT if self.index == row else Effect.NONE).render()
+                draw_text(self.rect.x, self.rect.y + row,
+                          command.text,
+                          effect= Effect.INVERT if self.index == row else Effect.NONE)
             )
         return mixels
