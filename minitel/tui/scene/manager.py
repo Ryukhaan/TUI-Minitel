@@ -1,3 +1,6 @@
+import time
+
+
 class SceneManager:
     _scene = None
     _stack = []
@@ -8,8 +11,13 @@ class SceneManager:
     @classmethod
     def run(cls, scene):
         cls._scene = scene
-        while cls._scene is not None:
-            cls._scene.main()
+        # Rendu initial
+        cls._scene.render()
+        while cls._scene:
+            changed = cls._scene.update()
+            if changed:
+                cls._scene.render()
+            time.sleep(0.01)
     
     @classmethod
     def goto(cls, scene_class):
@@ -25,4 +33,7 @@ class SceneManager:
     @classmethod
     def return_to_caller(cls):
         """Return to the previous scene by popping the stack."""
-        cls._scene = cls._stack.pop()
+        if cls._stack:
+            cls._scene = cls._stack.pop()
+        else:
+            cls._scene = None

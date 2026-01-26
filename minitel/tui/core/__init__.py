@@ -1,4 +1,11 @@
-from .color import Color
 from .effect import Effect
+from .color import Color
+from .mixel import Mixel
 from .rectangle import Rectangle
-from .config import *
+
+__all__ = [
+    'Color',
+    'Effect',
+    'Rectangle',
+    'Mixel'
+]

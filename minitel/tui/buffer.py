@@ -1,5 +1,5 @@
-from .widget import Mixel
-from .config import SCREEN_HEIGHT, SCREEN_WIDTH
+from minitel.tui.core.mixel import Mixel
+from minitel.tui.core.config import SCREEN_HEIGHT, SCREEN_WIDTH
 
 class MinitelBuffer:
     def __init__(self, cols=SCREEN_WIDTH, rows=SCREEN_HEIGHT):

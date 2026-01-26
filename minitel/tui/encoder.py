@@ -1,6 +1,5 @@
-
-from .constants import *
-from .core import Effect, Color, Mixel
+from minitel.tui.core.constants import *
+from minitel.tui.core import Effect, Color, Mixel
 
 class MinitelEncoder:
     def __init__(self):

@@ -16,7 +16,7 @@ class Footer(Window):
         super().__init__(
             Rectangle(FOOTER_X, FOOTER_Y, SCREEN_WIDTH, FOOTER_HEIGHT)
         )
-        self.label = Label(1, self.y+1, text=os.path.basename(__file__))
+        self.label = Label(1, self.rect.y+1, text=os.path.basename(__file__))
 
     def update(self, path: str = ''):
         self.label.text = path

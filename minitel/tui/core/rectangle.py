@@ -1,7 +1,8 @@
 
-from typing import NamedTuple
+from dataclasses import dataclass
 
-class Rectangle(NamedTuple):
+@dataclass
+class Rectangle:
     x: int
     y: int
     width: int

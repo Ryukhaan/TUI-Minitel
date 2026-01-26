@@ -9,15 +9,15 @@ class HorizontalLine(Label):
     def __init__(self, x: int, y: int, length: int = 1, type: str = 'top',
                 color: Color = Color.WHITE, 
                 effect: Effect = Effect.SEMIGRAPHIQUE):
-        if self.type == 'top':
+        if type == 'top':
             text = "#" * length
-        elif self.type == 'middle':
+        elif type == 'middle':
             text = "," * length
-        elif self.type == 'bottom':
+        elif type == 'bottom':
             text = "p" * length
         else:
             text = f"{type}" * length
-        super().__init__(x, y, text, 1, color, effect)
+        super().__init__(x, y, text, color, effect)
 
 
     def render(self) -> list[Mixel]:
