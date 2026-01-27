@@ -52,6 +52,15 @@ class MinitelEncoder:
         for mixel in run:
             bytes_arr.extend([ord(mixel.character)])
 
+        # --- Reset effect et couleur à la fin de la run ---
+        if self.current_effect != Effect.NONE:
+            bytes_arr.extend(Effect.NONE.encode())
+            self.current_effect = Effect.NONE
+
+        if self.current_color != Color.WHITE:
+            bytes_arr.extend(Color.WHITE.encode())
+            self.current_color = Color.WHITE
+
         return bytes_arr
             
     def _encode_position(self, x, y, relatif = False):

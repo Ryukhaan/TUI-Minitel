@@ -73,7 +73,10 @@ class KeyboardController:
             return None
         print("Keyboard Sequence", seq.valeurs)
         vals = tuple(seq.valeurs)
-        key = KEY_MAP[vals]
+        try:
+            key = KEY_MAP[vals]
+        except KeyError as ex:
+            raise ex
         if key:
             return key
         return chr(seq.valeurs[-1])

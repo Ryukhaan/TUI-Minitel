@@ -12,6 +12,49 @@ from minitel.Sequence import Sequence
 from minitel.Minitel import Minitel
 from math import sqrt
 
+def rgb_to_xyz(r, g, b):
+    # Normaliser les valeurs RGB (0-255 → 0-1)
+    r = r / 255.0
+    g = g / 255.0
+    b = b / 255.0
+
+    # Appliquer la correction gamma
+    r = r ** 2.2 if r <= 0.04045 else ((r + 0.055) / 1.055) ** 2.4
+    g = g ** 2.2 if g <= 0.04045 else ((g + 0.055) / 1.055) ** 2.4
+    b = b ** 2.2 if b <= 0.04045 else ((b + 0.055) / 1.055) ** 2.4
+
+    # Convertir en XYZ (D65 illuminant)
+    x = r * 0.4124564 + g * 0.3575761 + b * 0.1804375
+    y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750
+    z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041
+
+    return x, y, z
+
+def xyz_to_lab(x, y, z):
+    # Référence D65
+    ref_x = 0.95047
+    ref_y = 1.00000
+    ref_z = 1.08883
+
+    # Normaliser XYZ
+    x = x / ref_x
+    y = y / ref_y
+    z = z / ref_z
+
+    # Fonction auxiliaire
+    def f(t):
+        if t > (6/29)**3:
+            return t ** (1/3)
+        else:
+            return (1/3) * (29/6)**2 * t + (4/29)
+
+    # Calculer L*, a*, b*
+    L = 116 * f(y) - 16
+    # a = 500 * (f(x) - f(y))
+    # b_lab = 200 * (f(y) - f(z))
+
+    return L
+
 def _huit_niveaux(niveau):
     """Convertit un niveau sur 8 bits (256 valeurs possibles) en un niveau
     sur 3 bits (8 valeurs possibles).
@@ -31,15 +74,18 @@ def _huit_niveaux(niveau):
     try:
         return int(niveau * 8 / 256)
     except TypeError:
-        return int(
-            round(
-                sqrt(
-                    0.299 * niveau[0] ** 2 +
-                    0.587 * niveau[1] ** 2 +
-                    0.114 * niveau[2] ** 2
-                )
-            ) * 8 / 256
-        )
+        gray = round(2.55 * xyz_to_lab(*rgb_to_xyz(niveau[0], niveau[1], niveau[2])))
+        level = int(gray * 8 / 256)
+        return level
+        # return int(
+        #     round(
+        #         sqrt(
+        #             0.299 * niveau[0] ** 2 +
+        #             0.587 * niveau[1] ** 2 +
+        #             0.114 * niveau[2] ** 2
+        #         )
+        #     ) * 8 / 256
+        # )
 
 def _deux_couleurs(couleurs):
     """Réduit une liste de couleurs à un couple de deux couleurs.
@@ -69,11 +115,10 @@ def _deux_couleurs(couleurs):
     # Prépare la liste des niveaux afin de pouvoir la trier du plus
     # utilisé au moins utilisé. Pour cela, on crée une liste de tuples
     # (niveau, nombre d’apparitions)
-    niveaux = [(index, valeur) for index, valeur in enumerate(niveaux)]
+    # niveaux = [(index, valeur) for index, valeur in enumerate(niveaux)]
 
     # Trie les niveaux par nombre d’apparition
-    niveaux = sorted(niveaux, key = itemgetter(1), reverse = True)
-
+    niveaux = sorted(enumerate(niveaux), key = itemgetter(1), reverse = True)
     # Retourne les deux niveaux les plus rencontrés
     return (niveaux[0][0], niveaux[1][0])
 
@@ -216,14 +261,15 @@ class ImageMinitel:
 
         for sequence in self.sequences:
             self.minitel.position(colonne, ligne)
-            self.minitel.envoyer(sequence)
+            self.minitel.send(sequence)
             ligne += 1
 
     def importer(self, image):
         """Importe une image de PIL et crée les séquences de code Minitel
         correspondantes. L’image fournie doit avoir été réduite à des
-        dimensions inférieures ou égales à 80×72 pixels. La largeur doit être
-        un multiple de 2 et la hauteur un multiple de 3.
+        dimensions inférieures ou égales à 80×72 pixels. 
+        Elle doit être quantifié égale en 8 niveaux.
+        La largeur doit être un multiple de 2 et la hauteur un multiple de 3.
 
         :param image:
             L’image à importer.
@@ -277,7 +323,7 @@ class ImageMinitel:
 
                 else:
                     # Convertit chaque couleur de pixel en huit niveau de gris
-                    pixels = [_huit_niveaux(pixel) for pixel in pixels]
+                    # pixels = [_huit_niveaux(pixel) for pixel in pixels]
 
                     # Recherche les deux couleurs les plus fréquentes
                     # un caractère ne peut avoir que deux couleurs !
@@ -340,6 +386,9 @@ class ImageMinitel:
 
                     sequence.ajoute(alpha)
                     old_alpha = alpha
+                
+                # sequence.ajoute(alpha)
+                # old_alpha = alpha
 
             if compte > 0:
                 if compte == 1:

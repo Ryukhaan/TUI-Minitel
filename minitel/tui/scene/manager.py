@@ -25,15 +25,17 @@ class SceneManager:
         cls._scene = scene_class()
 
     @classmethod
-    def call(cls, scene_class):
+    def call(cls, scene_class, *args, **kwargs):
         """Call a new scene and push the current scene onto the stack."""
         cls._stack.append(cls._scene)
-        cls._scene = scene_class()
+        cls._scene = scene_class(*args, **kwargs)
+        print(type(cls._scene))
 
     @classmethod
     def return_to_caller(cls):
         """Return to the previous scene by popping the stack."""
         if cls._stack:
             cls._scene = cls._stack.pop()
+            print(type(cls._scene))
         else:
             cls._scene = None
