@@ -45,6 +45,9 @@ class MenuDesktopWindow(Window):
     def current_item(self):
         return self.items[self.index]
     
+    def update(self):
+        return False
+    
     # ------------------------
     # Handlers
     # ------------------------

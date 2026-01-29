@@ -8,11 +8,12 @@ from minitel.tui.core.config import SCREEN_WIDTH
 from minitel.tui.keyboard import Key, KeyboardController
 from minitel.tui.scene.manager import SceneManager
 from minitel.tui.scene.base import SceneBase
-from minitel.tui.window import Footer, Header
 from minitel.tui.graphics import Graphics
 
 from minitel.apps.miw.miw import MinitelImageViewer
 
+from .footer import Footer
+from .header import Header
 from .menu_window import MenuDesktopWindow
 
 class Desktop(SceneBase):
@@ -36,11 +37,14 @@ class Desktop(SceneBase):
 
     def update(self):
         _, key = KeyboardController.poll()
+        for window in self.windows.values():
+            if window.update():
+                Graphics.update(window.render())
         return key
     
     def _initialize(self):
         self.windows['header'] = Header()
-        self.windows['footer'] = Footer()
+        self.windows['footer'] = Footer(str(self.cwd.resolve())) #str(self.cwd.parent.resolve())
         self.create_menu_window()
 
     def create_menu_window(self):
@@ -60,6 +64,7 @@ class Desktop(SceneBase):
             self.cwd = path
             self.refresh()
             self._update_files()
+            self.windows['footer'].label = str(self.cwd.resolve())
         if os.path.isfile(path):
             if path.suffix in [".png", ".jpg", ".jpeg", ".tiff", ".bmp"]:
                 self.windows['menu'].active = False
@@ -73,6 +78,7 @@ class Desktop(SceneBase):
             self.cwd = parent
             self.refresh()
             self._update_files()
+            self.windows['footer'].label = str(self.cwd.resolve())
     
     def _update_files(self):
         # Mise à jour des items
@@ -95,7 +101,6 @@ class Desktop(SceneBase):
         Graphics.reset_attributes()
         Graphics.direct_send([US, 0x40 + menu.rect.y , 0x41])
         for i in range(len(menu.paged_items[0])):
-            print(menu.rect.y, i)
             Graphics.direct_send([CSI, 0x4B, LF])
             Graphics._instance.buffer.reset_row(menu.rect.y + i - 1)
         Graphics.flush()
