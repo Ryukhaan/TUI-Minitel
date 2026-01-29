@@ -5,4 +5,4 @@ def draw_text(x, y, text,
               effect: Effect = Effect.NONE) -> list[Mixel]:
     """Créer l'ensemble des Mixel pour afficher un texte.
     """
-    return [Mixel(x+i, y, char, color, effect) for i, char in enumerate(text)]
+    return [Mixel(x+i, y, char, fg_color=color, effect=effect) for i, char in enumerate(text)]

@@ -75,8 +75,8 @@ class KeyboardController:
         vals = tuple(seq.valeurs)
         try:
             key = KEY_MAP[vals]
-        except KeyError as ex:
-            raise ex
-        if key:
             return key
+        except KeyError as ex:
+            print(f"Key Not Found {vals}")
+            raise ex
         return chr(seq.valeurs[-1])

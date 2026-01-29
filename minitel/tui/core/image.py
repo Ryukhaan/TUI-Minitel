@@ -5,136 +5,74 @@ PIL en semi-graphiques pour le Minitel.
 
 """
 
-from operator import itemgetter
-
-from minitel.constantes import ESC, SO, DC2, COULEURS_MINITEL
-from minitel.Sequence import Sequence
-from minitel.Minitel import Minitel
 
 from PIL import Image
+import numpy as np
+from operator import itemgetter
 
-from minitel.tui.core.color import Color
-from minitel.tui.core.effect import Effect
+from minitel.constantes import ESC, RS, SO, DC2, COULEURS_MINITEL
+
 from minitel.tui.core.mixel import Mixel
 
-def calculer_histogramme(pixels, bins=256):
-    histogramme = [0] * bins
-    for pixel in pixels:
-        histogramme[pixel] += 1
-    return histogramme
-
 def initialize_centers(pixels, k=8):
-	histogramme = calculer_histogramme(pixels)
-	total_pixels = sum(histogramme)
-	seuil = total_pixels // k  # Seuil pour chaque cluster
+    """Initialisation des centres basée sur l'histogramme."""
+    hist, _ = np.histogram(pixels, bins=256, range=(0, 256))
+    total = hist.sum()
+    seuil = total // k
 
-	# Calculer la somme cumulée
-	somme_cumulee = 0
-	centres = []
-	for valeur in range(256):
-		somme_cumulee += histogramme[valeur]
-		if somme_cumulee >= seuil:
-			centres.append(valeur)
-			somme_cumulee = 0  # Réinitialiser pour le prochain cluster
-			if len(centres) == k:
-				break
+    cum_sum = 0
+    centers = []
+    for val in range(256):
+        cum_sum += hist[val]
+        if cum_sum >= seuil:
+            centers.append(val)
+            cum_sum = 0
+            if len(centers) == k:
+                break
 
-	# Si on n'a pas assez de centres, compléter avec des valeurs uniformes
-	if len(centres) < k:
-		valeurs_complementaires = set(range(0, 256, 256 // k))
-		centres += list(valeurs_complementaires - set(centres))[:k - len(centres)]
-		centres = sorted(centres)
-	centres = sorted(centres)
-	return centres
+    if len(centers) < k:
+        complement = np.linspace(0, 255, k, dtype=int)
+        centers = sorted(set(centers).union(complement))[:k]
+
+    return np.array(centers, dtype=np.float32)
 
 def kmeans_quantification(pixels, k=8, max_iter=100, eps=1e-4):
-	# Initialisation aléatoire des centres
-	centres = initialize_centers(pixels)
+    shape = pixels.shape
+    pixels = pixels.flatten().astype(np.float32)
+    centers = initialize_centers(pixels, k)
 
-	for _ in range(max_iter):
-		# Étape 1 : Associer chaque pixel au centre le plus proche
-		clusters = [[] for _ in range(k)]
-		for pixel in pixels:
-			distances = [abs(pixel - centre) for centre in centres]
-			cluster_idx = distances.index(min(distances))
-			clusters[cluster_idx].append(pixel)
+    for _ in range(max_iter):
+        # Étape 1 : distances et assignation
+        distances = np.abs(pixels[:, None] - centers[None, :])  # shape: (n_pixels, k)
+        labels = np.argmin(distances, axis=1)
 
-		# Étape 2 : Recalculer les centres
-		nouveaux_centres = []
-		for cluster in clusters:
-			if cluster:
-				nouveau_centre = sum(cluster) // len(cluster)
-			else:
-				nouveau_centre = centres[clusters.index(cluster)]
-			nouveaux_centres.append(nouveau_centre)
+        # Étape 2 : recalcul des centres
+        new_centers = np.array([pixels[labels == i].mean() if np.any(labels == i) else centers[i]
+                                for i in range(k)], dtype=np.float32)
 
-		# Vérifier la convergence
-		d = 0.0
-		for i in range(len(centres)):
-			d += abs(centres[i] - nouveaux_centres[i])
-		d /= len(centres)
-		if nouveaux_centres == centres or d < eps:
-			break
-		centres = nouveaux_centres
+        # Convergence
+        if np.allclose(new_centers, centers, atol=eps):
+            break
+        centers = new_centers
 
-	return centres
+    # Quantification
+    distances = np.abs(pixels[:, None] - centers[None, :])
+    labels = np.argmin(distances, axis=1)
+    quantized_levels = centers[labels]
 
-def quantify_with_kmeans(image_pil):
-	# Extraire les pixels de l'image PIL
-	pixels = list(image_pil.get_flattened_data())
+    return labels.reshape(shape), quantized_levels.reshape(shape), centers
 
-	# Appliquer k-means
-	niveaux = kmeans_quantification(pixels, k=8)
+def quantify_with_kmeans(image_pil, k=8):
+    pixels = np.array(image_pil)
+    labels, levels, centers = kmeans_quantification(pixels, k=k)
 
-	# Quantifier les pixels
-	pixels_quantifies = []
-	level_quantifies = []
-	for pixel in pixels:
-		distances = [abs(pixel - niveau) for niveau in niveaux]
-		value = distances.index(min(distances))
-		level = niveaux[value]
-		pixels_quantifies.append(value)
-		level_quantifies.append(level)
+    # Image PIL quantifiée en index de cluster
+    image_quantized = Image.fromarray(labels.astype(np.uint8), mode='L')
 
-	# Reconstruire une image PIL à partir des pixels quantifiés
-	image_quantifiee = Image.new(image_pil.mode, image_pil.size)
-	image_quantifiee.putdata(pixels_quantifies)
-	gray = Image.new(image_pil.mode, image_pil.size)
-	gray.putdata(level_quantifies)
+    # Image PIL quantifiée en niveaux réels
+    image_gray = Image.fromarray(levels.astype(np.uint8), mode='L')
 
-	return image_quantifiee, gray, niveaux
-
-# def _huit_niveaux(niveau):
-#     """Convertit un niveau sur 8 bits (256 valeurs possibles) en un niveau
-#     sur 3 bits (8 valeurs possibles).
-
-#     :param niveau:
-#         Niveau à convertir. Si c’est un tuple qui est fourni, la luminosité de
-#         la couleur est alors calculée. La formule est issue de la page
-#         http://alienryderflex.com/hsp.html
-#     :type niveau:
-#         un tuple ou un entier
-
-#     :returns:
-#         Un entier compris entre 0 et 7 inclus.
-#     """
-#     # Niveau peut soit être un tuple soit un entier
-#     # Gère les deux cas en testant l’exception
-#     try:
-#         return int(niveau * 8 / 256)
-#     except TypeError:
-#         gray = round(2.55 * xyz_to_lab(*rgb_to_xyz(niveau[0], niveau[1], niveau[2])))
-#         level = int(gray * 8 / 256)
-#         return level
-#         # return int(
-#         #     round(
-#         #         sqrt(
-#         #             0.299 * niveau[0] ** 2 +
-#         #             0.587 * niveau[1] ** 2 +
-#         #             0.114 * niveau[2] ** 2
-#         #         )
-#         #     ) * 8 / 256
-#         # )
+    return image_quantized, image_gray, centers
 
 def _deux_couleurs(couleurs):
     """Réduit une liste de couleurs à un couple de deux couleurs.
@@ -222,9 +160,9 @@ def _minitel_arp(niveau):
     assert isinstance(niveau, int)
 
     try:
-        return Sequence([ESC, 0x50 + COULEURS_MINITEL[niveau]])
+        return [ESC, 0x50 + COULEURS_MINITEL[niveau]]
     except IndexError:
-        return Sequence([ESC, 0x50])
+        return [ESC, 0x50]
 
 def _minitel_avp(niveau):
     """Convertit un niveau en une séquence de codes Minitel définissant la
@@ -242,9 +180,9 @@ def _minitel_avp(niveau):
     assert isinstance(niveau, int)
 
     try:
-        return Sequence([ESC, 0x40 + COULEURS_MINITEL[niveau]])
+        return [ESC, 0x40 + COULEURS_MINITEL[niveau]]
     except IndexError:
-        return Sequence([ESC, 0x47])
+        return [ESC, 0x47]
 
 class ImageMinitelMixels:
     """Convertit une image PIL en Mixels pour Minitel semi-graphique."""
@@ -257,60 +195,135 @@ class ImageMinitelMixels:
 
     def importer(self, image: Image.Image):
         """Convertit l'image PIL en Mixels."""
-        # Dimensions du Minitel semi-graphique
-        self.largeur = image.width // 2
-        self.hauteur = image.height // 3
-        self.mixels = []
+        assert image.size[0] <= 80
+        assert image.size[1] <= 72
 
-        for ligne in range(self.hauteur):
-            for col in range(self.largeur):
-                # On récupère les 6 pixels du bloc 2x3
-                bloc_pixels = [
-                    image.getpixel((col * 2 + dx, ligne * 3 + dy))
-                    for dy in range(3)
-                    for dx in range(2)
+        # En mode semi-graphique, un caractère a 2 pixels de largeur
+        # et 3 pixels de hauteur
+        self.largeur = int(image.size[0] / 2)
+        self.hauteur = int(image.size[1] / 3)
+
+        # Initialise la liste des séquences
+        sequences = [[RS]]
+
+        for hauteur in range(0, self.hauteur):
+            # Variables pour l’optimisation du code généré
+            old_arp = -1
+            old_avp = -1
+            old_alpha = 0
+            compte = 0
+
+            sequence = []
+            # Passe en mode semi-graphique
+            sequence.append(SO)
+
+            if self.disjoint:
+                sequence.extend([ESC, 0x5A])
+
+            for largeur in range(0, self.largeur):
+                # Récupère 6 pixels
+                pixels = [
+                    image.getpixel((largeur * 2 + x, hauteur * 3 + y))
+                    for x, y in [(0, 0), (1, 0),
+                                  (0, 1), (1, 1),
+                                  (0, 2), (1, 2)]
                 ]
 
-                # Deux couleurs max par bloc
-                arp, avp = _deux_couleurs(bloc_pixels)
+                # if self.disjoint:
+                #     # Convertit chaque couleur de pixel en deux niveaux de gris
+                #     pixels = [_huit_niveaux(pixel) for pixel in pixels]
 
-                # Quantification du bloc selon arp/avp
-                bloc_pixels_bin = [_arp_ou_avp(px, arp, avp) for px in bloc_pixels]
+                #     arp, avp = _deux_couleurs(pixels)
 
-                # Convertit 2x3 pixels en caractère semi-graphique
-                char_code = self._pixels_to_char(bloc_pixels_bin)
+                #     if arp != 0:
+                #         arp, avp = 0, arp
 
-                # Crée un Mixel avec position et couleurs
-                self.mixels.append(
-                    Mixel(
-                        x=col + 1,       # position colonne (1-index)
-                        y=ligne + 1,     # position ligne (1-index)
-                        character=chr(char_code),
-                        effect=Effect.SEMIGRAPHIQUE,
-                        color=Color.WHITE,  # tu peux mapper arp/avp si tu veux couleurs
-                    )
-                )
+                # else:
+                    # Convertit chaque couleur de pixel en huit niveau de gris
+                    # pixels = [_huit_niveaux(pixel) for pixel in pixels]
 
-    def _pixels_to_char(self, bloc):
-        """
-        Transforme 6 pixels (liste de 0/1) en code caractère semi-graphique Minitel.
-        bloc[0..5] correspond à :
-            [0,1,
-             2,3,
-             4,5]
-        """
-        bits = [
-            '0',            # bit 0 toujours 0
-            str(bloc[5]),   # bit 1
-            '1',            # bit 2 toujours 1
-            str(bloc[4]),   # bit 3
-            str(bloc[3]),   # bit 4
-            str(bloc[2]),   # bit 5
-            str(bloc[1]),   # bit 6
-            str(bloc[0]),   # bit 7
-        ]
-        return int(''.join(bits), 2)
+                    # Recherche les deux couleurs les plus fréquentes
+                    # un caractère ne peut avoir que deux couleurs !
+                arp, avp = _deux_couleurs(pixels)
 
-    def render(self):
-        """Renvoie la liste de mixels prête à Graphics.update()"""
-        return self.mixels
+                # Réduit à deux le nombre de couleurs dans un bloc de 6 pixels
+                # Cela peut faire apparaître des artefacts mais est inévitable
+                pixels = [_arp_ou_avp(pixel, arp, avp) for pixel in pixels]
+
+                # Convertit les 6 pixels en un caractère mosaïque du minitel
+                # Le caractère est codé sur 7 bits
+                bits = [
+                    '0',
+                    str(pixels[5]),
+                    '1',
+                    str(pixels[4]),
+                    str(pixels[3]),
+                    str(pixels[2]),
+                    str(pixels[1]),
+                    str(pixels[0])
+                ]
+
+                # Génère l’octet (7 bits) du caractère mosaïque
+                alpha = int(''.join(bits), 2)
+
+                # Si les couleurs du précédent caractères sont inversés,
+                # inverse le caractère mosaïque. Cela évite d’émettre
+                # à nouveau des codes couleurs. Cela fonctionne uniquement
+                # lorsque le mode disjoint n’est pas actif
+                if not self.disjoint and old_arp == avp and old_avp == arp:
+                    # Inverse chaque bit à l’exception du 6e et du 8e
+                    alpha = alpha ^ 0b01011111
+                    avp, arp = arp, avp
+                    
+                if old_arp == arp and old_avp == avp and alpha == old_alpha:
+                    # Les précédents pixels sont identiques, on le retient
+                    # pour utiliser un code de répétition plus tard
+                    compte += 1
+                else:
+                    # Les pixels ont changé, mais il peut y avoir des pixels
+                    # qui n’ont pas encore été émis pour cause d’optimisation
+                    if compte > 0:
+                        if compte == 1:
+                            sequence.append(old_alpha)
+                        else:
+                            sequence.extend([DC2, 0x40 + compte])
+
+                        compte = 0
+
+                    # Génère les codes Minitel
+                    if old_arp != arp:
+                        # L’arrière-plan a changé
+                        sequence.extend(_minitel_arp(arp))
+                        old_arp = arp
+
+                    if old_avp != avp:
+                        # L’avant-plan a changé
+                        sequence.extend(_minitel_avp(avp))
+                        old_avp = avp
+
+                    sequence.append(alpha)
+                    old_alpha = alpha
+                
+                # sequence.ajoute(alpha)
+                # old_alpha = alpha
+
+            if compte > 0:
+                if compte == 1:
+                    sequence.append(old_alpha)
+                else:
+                    sequence.extend([DC2, 0x40 + compte])
+
+                compte = 0
+
+            if self.disjoint:
+                sequence.extend([ESC, 0x59])
+
+            # Une ligne vient d’être terminée, on la stocke dans la liste des
+            # séquences
+            sequences.append(sequence)
+        # pos_sequences = []
+        # for seq in sequences:
+        #     pos_sequences.extend([LF, CR])
+        #     pos_sequences.extend(seq)
+        # print(sequences)
+        return sequences

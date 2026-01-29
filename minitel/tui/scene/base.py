@@ -1,4 +1,5 @@
 from minitel.tui.graphics import Graphics
+from minitel.tui.scene.manager import SceneManager
 
 class SceneBase:
     def __init__(self):
@@ -15,6 +16,15 @@ class SceneBase:
     def __getitem__(self, key):
         return self.windows[key]
     
+    def on_enter(self):
+        raise NotImplementedError("on_enter function not implemented")
+    
+    def on_exit(self):
+        raise NotImplementedError("on_exit function not implemented")
+    
+    def on_resume(self):
+        raise NotImplementedError("on_resume function not implemented")
+
     def handle_key(self, key):
         for widget in self.widgets.values():
             if hasattr(widget, "handle_key"):
@@ -24,9 +34,13 @@ class SceneBase:
         return False
     
     def update(self):
-        raise NotImplementedError()
+        if SceneManager._scene != self:
+            return None
 
     def render(self):
+        if SceneManager._scene != self:
+            return
         mixels = [window.render() for window in self.windows.values()]
         Graphics.update(mixels)
+    
             

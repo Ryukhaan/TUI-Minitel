@@ -11,8 +11,14 @@ class Color(Enum):
     GRAY_6 = 6
     WHITE = 7
 
-    def encode(self):
-        try:
-            return [ESC, 0x40 + COULEURS_MINITEL[str(self.value)]]
-        except Exception:
-            return []
+    def encode(self, background: bool =False):
+        if background:
+            try:
+                return [ESC, 0x50 + COULEURS_MINITEL[str(self.value)]]
+            except IndexError:
+                return [ESC, 0x50]
+        else:
+            try:
+                return [ESC, 0x40 + COULEURS_MINITEL[str(self.value)]]
+            except Exception:
+                return [ESC, 0x40]

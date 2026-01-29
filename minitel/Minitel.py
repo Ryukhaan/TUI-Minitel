@@ -1140,6 +1140,9 @@ class Minitel:
         else:
             self.send([ESC, 0x29, 0x20, 0x43])
     
+    def flush(self):
+        self.sortie.join()
+        
     def flush_echo(self):
         """Consomme tous les caractères parasites restants"""
         try:

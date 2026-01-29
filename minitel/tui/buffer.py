@@ -10,6 +10,9 @@ class MinitelBuffer:
     def clear(self):
         self.buffer = [[None for _ in range(self.cols)] for _ in range(self.rows)]
 
+    def reset_row(self, idx):
+        self.buffer[idx] = [None for _ in range(self.cols)]
+
     def apply(self, mixels: list[Mixel]) -> list[Mixel]:
         changed = []
 

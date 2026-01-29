@@ -1,5 +1,7 @@
 import time
 
+from minitel.tui.graphics import Graphics
+
 
 class SceneManager:
     _scene = None
@@ -17,6 +19,7 @@ class SceneManager:
             changed = cls._scene.update()
             if changed:
                 cls._scene.render()
+                Graphics.flush()
             time.sleep(0.01)
     
     @classmethod
@@ -27,15 +30,27 @@ class SceneManager:
     @classmethod
     def call(cls, scene_class, *args, **kwargs):
         """Call a new scene and push the current scene onto the stack."""
-        cls._stack.append(cls._scene)
+        if cls._scene:
+            cls._stack.append(cls._scene)
+        Graphics.flush()
+        Graphics.clear()
+        Graphics.clear_buffer()
         cls._scene = scene_class(*args, **kwargs)
-        print(type(cls._scene))
+        cls._scene.on_enter()
 
     @classmethod
     def return_to_caller(cls):
         """Return to the previous scene by popping the stack."""
+        try:
+            cls._scene.on_exit()
+        except AttributeError as ex:
+            raise ex
+        
         if cls._stack:
             cls._scene = cls._stack.pop()
-            print(type(cls._scene))
+            Graphics.flush()
+            Graphics.clear()
+            Graphics.clear_buffer()
+            cls._scene.on_resume()
         else:
             cls._scene = None
