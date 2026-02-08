@@ -1,5 +1,5 @@
 from minitel.tui.core.config import SCREEN_HEIGHT, SCREEN_WIDTH
-from minitel.tui.core import Effect, Mixel, Rectangle, Color
+from minitel.tui.core import GraphicState, Mixel, Rectangle, Color
 from minitel.tui.keyboard import Key
 from minitel.tui.window.ops import draw_text
 

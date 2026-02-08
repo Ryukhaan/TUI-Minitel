@@ -43,8 +43,8 @@ class Desktop(SceneBase):
         return key
     
     def _initialize(self):
-        self.windows['header'] = Header()
-        self.windows['footer'] = Footer(str(self.cwd.resolve())) #str(self.cwd.parent.resolve())
+        self.windows['header'] = Header(str(self.cwd.resolve()))
+        self.windows['footer'] = Footer()
         self.create_menu_window()
 
     def create_menu_window(self):
@@ -64,7 +64,7 @@ class Desktop(SceneBase):
             self.cwd = path
             self.refresh()
             self._update_files()
-            self.windows['footer'].label = str(self.cwd.resolve())
+            self.windows['header'].label = str(self.cwd.resolve())
         if os.path.isfile(path):
             if path.suffix in [".png", ".jpg", ".jpeg", ".tiff", ".bmp"]:
                 self.windows['menu'].active = False
@@ -78,7 +78,7 @@ class Desktop(SceneBase):
             self.cwd = parent
             self.refresh()
             self._update_files()
-            self.windows['footer'].label = str(self.cwd.resolve())
+            self.windows['header'].label = str(self.cwd.resolve())
     
     def _update_files(self):
         # Mise à jour des items

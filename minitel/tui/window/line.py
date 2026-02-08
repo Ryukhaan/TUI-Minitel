@@ -1,5 +1,5 @@
 from .label import Label
-from minitel.tui.core import Color, Effect, Mixel
+from minitel.tui.core import Color, GraphicState, Mixel
 
 class HorizontalLine(Label):
     """Classe de gestion de label
@@ -8,7 +8,7 @@ class HorizontalLine(Label):
     """
     def __init__(self, x: int, y: int, length: int = 1, type: str = 'top',
                 color: Color = Color.WHITE, 
-                effect: Effect = Effect.SEMIGRAPHIQUE):
+                effect: GraphicState = GraphicState.SEMIGRAPHIQUE):
         if type == 'top':
             text = "#" * length
         elif type == 'middle':

@@ -1,5 +1,5 @@
 from minitel.tui.core.color import Color
-from minitel.tui.core.effect import Effect
+from minitel.tui.core.state import GraphicState
 from minitel.tui.core.mixel import Mixel
 from minitel.tui.keyboard import Key
 from minitel.tui.window.base import Window
@@ -203,7 +203,7 @@ class WindowSelectable(Window):
                 self.rect.y + row,
                 item,
                 color=text_color,
-                effect= Effect.INVERT if self.index == row else Effect.NONE)
+                effect= GraphicState.INVERT if self.index == row else GraphicState.NONE)
 
     def render(self, full: bool = False) -> list[Mixel]:
         mixels = []
@@ -220,7 +220,7 @@ class WindowSelectable(Window):
                         self.rect.y + row,
                         item,
                         color=text_color,
-                        effect= Effect.INVERT if self.index == row else Effect.NONE)
+                        effect= GraphicState.INVERT if self.index == row else GraphicState.NONE)
             )
         
         if full:

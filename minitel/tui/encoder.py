@@ -1,82 +1,19 @@
 from minitel.tui.core.constants import *
-from minitel.tui.core import Effect, Color, Mixel
+from minitel.tui.core import GraphicState, Mixel
 
-import numpy as np
-from PIL import Image
+UNDERLINE_ON = [ESC, 0x5a]
+UNDERLINE_OFF = [ESC, 0x59]
+BLINK_OFF = [ESC, 0x48]
+BLINK_ON = [ESC, 0x49]
+INVERT_ON = [ESC, 0x5d]
+INVERT_OFF = [ESC, 0x5c]
+MASK_ON = [ESC, 0x58]
+MASK_OFF = [ESC, 0x5f]
 
-def compute_cost(mixels: list[Mixel]):
-    cost = np.ones((len(mixels), len(mixels)))
-    for i in range(cost.shape[0]):
-        m_i = mixels[i]
-        for j in range(cost.shape[1]):
-            m_j = mixels[j]
-            if i == j:
-                cost[i, j] = float('inf')
-            else:
-                cost[i,j] = cost_move(m_i, m_j) + cost_color(m_i, m_j) + cost_effect(m_i, m_j)
-    cost_norm = (cost - cost.min()) / (cost.max() - cost.min())
-    im = Image.fromarray(np.uint8(cost_norm*255))
-    im.save("./cost.png")
-    return cost
-
-def cost_move(a: Mixel, b: Mixel):
-    if a.x == b.x+1 and a.y == b.y:
-        return 1
-    return 3
-
-def cost_color(a: Mixel, b: Mixel):
-    cost = 0.
-    if a.bg_color != b.bg_color:
-        cost += 2
-    if a.fg_color != b.fg_color:
-        cost += 2
-    return cost
-
-def cost_effect(a: Mixel, b: Mixel):
-    cost = 0.
-    if a.effect != b.effect:
-        cost += len(a.effect.encode(current_effect=b.effect))
-    return cost
-
-def nearest_neighbor_tsp(cost_matrix, start: int = 0):
-    """
-    Algorithme du voisin le plus proche pour TSP.
-
-    :param cost_matrix: matrice carrée n x n des coûts entre chaque mixel
-    :param start: index du mixel de départ
-    :return: sequence des indices des mixels dans l'ordre du parcours
-    """
-    n = len(cost_matrix)
-    visited = set()
-    sequence = []
-
-    current = start
-    visited.add(current)
-    sequence.append(current)
-
-    while len(visited) < n:
-        # trouver le mixel non visité le plus proche
-        next_mixel = None
-        min_cost = float('inf')
-        for j in range(n):
-            if j not in visited and cost_matrix[current][j] < min_cost:
-                min_cost = cost_matrix[current][j]
-                next_mixel = j
-
-        if next_mixel is None:
-            break  # sécurité, ne devrait pas arriver
-
-        visited.add(next_mixel)
-        sequence.append(next_mixel)
-        current = next_mixel
-
-    return sequence
 
 class MinitelEncoder:
     def __init__(self):
-        self.current_effect = Effect.NONE
-        self.current_fg = Color.WHITE
-        self.current_bg = Color.BLACK
+        self.current_state = GraphicState()
         self.last_x = 1  # Position du curseur actuelle
         self.last_y = 1
 
@@ -113,38 +50,18 @@ class MinitelEncoder:
         pos = self._encode_position(first.x, first.y)
         bytes_arr.extend(pos)
 
-        # changement de couleurs si nécessaire
-        if first.bg_color != self.current_bg:  # arp
-            bytes_arr.extend(first.bg_color.encode(background=True))
-            self.current_bg = first.bg_color
+        # bytes_arr.extend(self._encode_state(current))
 
-        if first.fg_color != self.current_fg:  # avp
-            bytes_arr.extend(first.fg_color.encode())
-            self.current_fg = first.fg_color
-
-        # changement d'effet si nécessaire
-        if first.effect != self.current_effect:
-            bytes_arr.extend(first.effect.encode(self.current_effect))
-            self.current_effect = first.effect
-
+        # current = first.state
         for mixel in run:
             # reset de l’effet si nécessaire avant d’écrire
-            if mixel.effect != self.current_effect:
-                bytes_arr.extend(mixel.effect.encode(self.current_effect))
-                self.current_effect = mixel.effect
+            if mixel.state != self.current_state:
+                bytes_arr.extend(self._encode_state_delta(self.current_state, mixel.state))
+                self.current_state = mixel.state
             bytes_arr.extend([ord(mixel.character)])
 
         # --- Reset effect et couleur à la fin de la run ---
-        if self.current_effect != Effect.NONE:
-            bytes_arr.extend(Effect.NONE.encode(self.current_effect))
-            self.current_effect = Effect.NONE
-
-        if self.current_fg != Color.WHITE:
-            bytes_arr.extend(Color.WHITE.encode())
-            self.current_color = Color.WHITE
-        if self.current_bg != Color.BLACK:
-            bytes_arr.extend(Color.BLACK.encode(background=True))
-            self.current_color = Color.WHITE
+        self.current_state = GraphicState()
 
         return bytes_arr
     
@@ -197,4 +114,30 @@ class MinitelEncoder:
             if x == -1:
                 return [BS]
             if y == 1:
-                return [LF] 
+                return [LF]
+            
+    def _encode_state_delta(self, current, target):
+        seq = []
+
+        if current.fg != target.fg:
+            seq += target.fg.encode()
+
+        if current.bg != target.bg:
+            seq += target.bg.encode(background=True)
+
+        if current.blink != target.blink:
+            seq += (BLINK_ON if target.blink else BLINK_OFF)
+
+        if current.invert != target.invert:
+            seq += (INVERT_ON if target.invert else INVERT_OFF)
+
+        if current.underline != target.underline:
+            seq += (UNDERLINE_ON if target.underline else UNDERLINE_OFF)
+
+        if current.mask != target.mask:
+            seq += (MASK_ON if target.mask else MASK_OFF)
+
+        if current.semigraphic != target.semigraphic:
+            seq += ([SO] if target.semigraphic else [SI])
+
+        return seq
