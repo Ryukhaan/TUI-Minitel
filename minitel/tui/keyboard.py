@@ -10,6 +10,8 @@ class Key(Enum):
     LEFT = auto()
     ENTER = auto()
     CANCEL = auto()
+    BACKSPACE = auto()
+    SOMMAIRE = auto()
 
 KEY_MAP = {
     (27, 79, 77): Key.ENTER,
@@ -20,7 +22,12 @@ KEY_MAP = {
     (10,): Key.DOWN,
     (27, 91, 67): Key.RIGHT,
     (27, 91, 68): Key.LEFT,
-    (8,): Key.LEFT,
+    (8,): Key.BACKSPACE,
+    # Touches de fonction Minitel (DC3/SEP = 0x13 + code)
+    (19, 65): Key.ENTER,      # ENVOI
+    (19, 69): Key.CANCEL,     # ANNULATION
+    (19, 70): Key.SOMMAIRE,   # SOMMAIRE
+    (19, 71): Key.BACKSPACE,  # CORRECTION
 }
 
 class KeyboardController:
@@ -68,15 +75,11 @@ class KeyboardController:
         self.listeners.append(listener)
 
     def _interpet(self, seq: Sequence):
-        # Séquences spéciales
         if not seq:
             return None
-        print("Keyboard Sequence", seq.valeurs)
         vals = tuple(seq.valeurs)
-        try:
-            key = KEY_MAP[vals]
-            return key
-        except KeyError as ex:
-            print(f"Key Not Found {vals}")
-            raise ex
-        return chr(seq.valeurs[-1])
+        if vals in KEY_MAP:
+            return KEY_MAP[vals]
+        if len(vals) == 1 and 32 <= vals[0] <= 126:
+            return chr(vals[0])
+        return None

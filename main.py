@@ -8,10 +8,12 @@ from minitel.tui.graphics import Graphics
 from minitel.tui.scene.manager import SceneManager
 from minitel.tui.widget.widget import *
 
+from minitel.apps.terminal.terminal import TerminalScene
 from minitel.apps.dekstop.desktop import Desktop as SceneDesktop
 
 if __name__ == "__main__":
-    minitel = Minitel('COM6')
+    # minitel = Minitel('COM6')
+    minitel = Minitel('/dev/cu.usbserial-A5069RR4')
     minitel.deviner_vitesse()
     minitel.identifier()
 
@@ -20,6 +22,7 @@ if __name__ == "__main__":
     minitel.send([0x13, 0x5e])
     minitel.definir_mode('VIDEOTEX')
     minitel.flush()
+    minitel.flush_echo()
     minitel.configurer_clavier(etendu = True, curseur = False, minuscule = True)
     minitel.echo(False)
     minitel.curseur(False)
@@ -29,5 +32,6 @@ if __name__ == "__main__":
     KeyboardController.init(minitel)
     Graphics.init(minitel)
     Graphics.reset_attributes()
-    desktop = SceneDesktop(start_path=Path("assets").resolve())
-    SceneManager.run(desktop)
+    #desktop = SceneDesktop(start_path=Path("assets").resolve())
+    #SceneManager.run(desktop)
+    SceneManager.run(TerminalScene(Path(".").resolve()))

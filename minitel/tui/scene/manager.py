@@ -39,6 +39,18 @@ class SceneManager:
         cls._scene.on_enter()
 
     @classmethod
+    def switch_to(cls, scene_instance):
+        """Remplace la scène courante par une nouvelle instance, vide le stack."""
+        if cls._scene:
+            cls._scene.on_exit()
+        cls._stack.clear()
+        Graphics.flush()
+        Graphics.clear()
+        Graphics.clear_buffer()
+        cls._scene = scene_instance
+        cls._scene.on_enter()
+
+    @classmethod
     def return_to_caller(cls):
         """Return to the previous scene by popping the stack."""
         try:

@@ -11,6 +11,7 @@ from minitel.tui.scene.base import SceneBase
 from minitel.tui.graphics import Graphics
 
 from minitel.apps.miw.miw import MinitelImageViewer
+from minitel.apps.terminal.terminal import TerminalScene
 
 from .footer import Footer
 from .header import Header
@@ -37,10 +38,19 @@ class Desktop(SceneBase):
 
     def update(self):
         _, key = KeyboardController.poll()
+        if key == Key.SOMMAIRE:
+            self._open_launcher()
+            return True
         for window in self.windows.values():
             if window.update():
                 Graphics.update(window.render())
         return key
+
+    def _open_launcher(self):
+        from minitel.apps.launcher.launcher import LauncherScene
+        from minitel.apps.registry import get_apps
+        self.windows['menu'].active = False
+        SceneManager.call(LauncherScene, get_apps())
     
     def _initialize(self):
         self.windows['header'] = Header(str(self.cwd.resolve()))
@@ -70,6 +80,9 @@ class Desktop(SceneBase):
                 self.windows['menu'].active = False
                 path: Path = deepcopy(Path(path))
                 SceneManager.call(MinitelImageViewer, path.parent.resolve())
+            elif path.suffix == ".sh":
+                self.windows['menu'].active = False
+                SceneManager.call(TerminalScene, path.parent.resolve())
     
     def on_item_cancel(self):
         """Appelé quand CANCEL / ESC"""
