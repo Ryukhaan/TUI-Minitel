@@ -66,9 +66,10 @@ class KeyboardController:
 
         key = cls._instance._interpet(seq)
         changed = False
-        for listener in cls._instance.listeners:
+        for listener in list(cls._instance.listeners):
             if listener.handle_key(key):
                 changed = True
+                break  # touche consommée, on arrête la propagation
         return changed, key
 
     def _register(self, listener):

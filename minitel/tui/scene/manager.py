@@ -31,6 +31,7 @@ class SceneManager:
     def call(cls, scene_class, *args, **kwargs):
         """Call a new scene and push the current scene onto the stack."""
         if cls._scene:
+            cls._scene.on_exit()
             cls._stack.append(cls._scene)
         Graphics.flush()
         Graphics.clear()
